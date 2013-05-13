@@ -7,6 +7,7 @@ import time
 import struct
 import os
 import select
+ICMP_ECHO = 8
 if sys.platform.startswith("win32"):
     default_timer = time.clock
 else:
@@ -43,6 +44,8 @@ class traceroute():
     def __init__(self,destination, timeout=1000):
         self.destination = to_ip(destination)
         self.timeout = timeout
+        self.own_id = os.getpid()
+        self.packet_size = 55
         self.reached = False
     def run(self):
         ttl_num = 1
@@ -50,11 +53,24 @@ class traceroute():
             self.getip(ttl_num)
             ttl_num += 1
     def getip(self,ttl_num):
-        self.send_one_icmp(ttl_num)
-    def send_one_icmp(self,ttl_num):
         sock = socket.socket(socket.AF_INET,socket.SOCK_RAW,socket.getprotobyname('icmp'))
+        self.send_one_icmp(sock,ttl_num)
+        self.receive_one_icmp(sock)
+    def send_one_icmp(self,sock,ttl_num):
         checksum = 0
-        header = struct.pack('!BBHHH',ICMP_ECHO,0,checksum,s
+        header = struct.pack('!BBHHH',ICMP_ECHO,0,checksum,self.own_id,self.packet_size)
+        padBytes = []
+        startVal = 0x42
+        for i in range(startVal,startVal + (self.packet_size)):
+            padBytes += [(i & 0xff)]
+        data = bytes(padBytes)
+        checksum = calculate_checksum(header + data)
+        header = struct.pack('!BBHHH',ICMP_ECHO,0,checksum,self.own_id,self.packet_size)
+        packet = header + data
+        sock.sendto(packet,(self.destination,1))
+    def receive_one_icmp(self,sock):
+
+
 def main():
     pass
 if __name__=='__main__':
