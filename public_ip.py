@@ -3,17 +3,11 @@
 import array
 import sys
 import socket
-import time
 import struct
 import os
-import select
 ICMP_PROTOCOL = 1
 ICMP_ECHO = 8
 ICMP_MAX_RECV = 2048
-if sys.platform.startswith("win32"):
-    default_timer = time.clock
-else:
-    default_timer = time.time
 def is_valid_ipv4_address(addr):
     parts = addr.split('.')
     if not len(parts) == 4:
@@ -56,8 +50,8 @@ class traceroute():
         return dict(zip(names, unpacked_data))
 
     def run(self):
-        ttl_num = 44
-        while not self.reached:
+        ttl_num = 1
+        while ttl_num<55:
             thisip = self.getip(ttl_num,35455)
             print(thisip)
             ttl_num += 1
@@ -80,16 +74,15 @@ class traceroute():
         checksum = calculate_checksum(header + data)
         header = struct.pack('!BBHHH',ICMP_ECHO,0,checksum,self.own_id,self.packet_size)
         packet = header + data
-        print(data)
+#        print(data)
         sock.sendto(packet,(self.destination,1))
     def receive_one_icmp(self,sock):
-        timeout = self.timeout / 1000.0
-        self.reached = True
+        sock.settimeout(10)
         while True:
-            inputready, outputready, exceptready = select.select([sock], [], [], timeout)
-            if inputready == []: # timeout
+            try:
+                packet_data, address = sock.recvfrom(ICMP_MAX_RECV)
+            except:
                 return None
-            packet_data, address = sock.recvfrom(ICMP_MAX_RECV)
             ip_header = self.header2dict(
                 names=[
                     "version", "type", "length",
@@ -100,7 +93,7 @@ class traceroute():
                 data=packet_data[:20]
                 )
             ip_header_len = (ip_header['version'] & 0xf) * 4
-            print(packet_data[28:])
+#            print(packet_data[28:])
             icmp_header = self.header2dict(
                 names=[
                     "type", "code", "checksum",
@@ -110,6 +103,8 @@ class traceroute():
                 data=packet_data[ip_header_len:ip_header_len+8]
             )
             ip = socket.inet_ntoa(struct.pack("!I", ip_header["src_ip"]))
+            print(ip)
+#            print(socket.inet_ntoa(struct.pack("!I", ip_header["dest_ip"])))
             return ip, ip_header, icmp_header
 
 def main():
